@@ -142,7 +142,7 @@ impl TaskPool {
         let threads = (0..num_threads)
             .map(|i| {
                 let ex = Arc::clone(&executor);
-                let shutdown_rx = shutdown_rx.clone();
+                let shutdown_rx: async_channel::Receiver<()> = shutdown_rx.clone();
 
                 let thread_name = if let Some(thread_name) = builder.thread_name.as_deref() {
                     format!("{thread_name} ({i})")
@@ -167,17 +167,40 @@ impl TaskPool {
                             }
                             let _destructor = CallOnDrop(on_thread_destroy);
                             loop {
-                                let res = std::panic::catch_unwind(|| {
-                                    let tick_forever = async move {
-                                        loop {
-                                            local_executor.tick().await;
+                                let res: Result<(), Box<dyn std::any::Any + Send>> =
+                                    std::panic::catch_unwind(|| {
+                                        let tick_forever = async move {
+                                            loop {
+                                                local_executor.tick().await;
+                                            }
+                                        };
+
+                                        // <Tom>
+                                        // The `shutdown_rx.recv()` future internally uses an `event-listerner` `Listener`,
+                                        // and parks the thread when there's no message, resulting in a heavy perf tax.
+                                        // (Would need to double-check this claim)
+
+                                        // block_on(ex.run(tick_forever.or(shutdown_rx.recv())))
+                                        //spin_on::spin_on(ex.run(tick_forever.or(shutdown_rx.recv())))
+
+                                        // <Tom>
+                                        // `spin_on` is >10% faster than `block_on`, but results in full CPU utilization
+                                        //
+                                        // This is a low-tech compromise by creating 2 spinny quick-response threads,
+                                        // and letting the others be a bit more sleepy.
+                                        //
+                                        // For a final twist, with 4 worker threads, this is actually 7% faster
+                                        // than 4 spinny threads on my Threadripper 2990WX on Windows.
+
+                                        if i < 2 {
+                                            spin_on::spin_on(ex.run(tick_forever));
+                                        } else {
+                                            block_on(ex.run(tick_forever));
                                         }
-                                    };
-                                    block_on(ex.run(tick_forever.or(shutdown_rx.recv())))
-                                });
+                                    });
                                 if let Ok(value) = res {
                                     // Use unwrap_err because we expect a Closed error
-                                    value.unwrap_err();
+                                    //value.unwrap_err();
                                     break;
                                 }
                             }
@@ -383,7 +406,7 @@ impl TaskPool {
         if spawned.is_empty() {
             Vec::new()
         } else {
-            block_on(async move {
+            spin_on::spin_on(async move {
                 let get_results = async {
                     let mut results = Vec::with_capacity(spawned.len());
                     while let Ok(task) = spawned.pop() {

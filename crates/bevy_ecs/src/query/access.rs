@@ -47,7 +47,7 @@ impl<'a, T: SparseSetIndex + fmt::Debug> fmt::Debug for FormattedBitSet<'a, T> {
 ///
 /// Used internally to ensure soundness during system initialization and execution.
 /// See the [`is_compatible`](Access::is_compatible) and [`get_conflicts`](Access::get_conflicts) functions.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub struct Access<T: SparseSetIndex> {
     /// All accessed elements.
     reads_and_writes: FixedBitSet,
@@ -62,6 +62,42 @@ pub struct Access<T: SparseSetIndex> {
     // Elements that are not accessed, but whose presence in an archetype affect query results.
     archetypal: FixedBitSet,
     marker: PhantomData<T>,
+}
+
+// <Tom>
+// Auto-derived `Clone` implements `clone_from` by just calling `clone`,
+// which means that we'd miss out on the specialized `clone_from` that `FixedBitSet` has.
+//
+// This manual version results in ~2% faster perf in Tiny Glade.
+impl<T: SparseSetIndex> Clone for Access<T> {
+    fn clone(&self) -> Self {
+        Self {
+            reads_and_writes: self.reads_and_writes.clone(),
+            writes: self.writes.clone(),
+            reads_all: self.reads_all.clone(),
+            writes_all: self.writes_all.clone(),
+            archetypal: self.archetypal.clone(),
+            marker: self.marker.clone(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        let Self {
+            reads_and_writes,
+            writes,
+            reads_all,
+            writes_all,
+            archetypal,
+            marker,
+        } = self;
+
+        reads_and_writes.clone_from(&source.reads_and_writes);
+        writes.clone_from(&source.writes);
+        reads_all.clone_from(&source.reads_all);
+        writes_all.clone_from(&source.writes_all);
+        archetypal.clone_from(&source.archetypal);
+        marker.clone_from(&source.marker);
+    }
 }
 
 impl<T: SparseSetIndex + fmt::Debug> fmt::Debug for Access<T> {
