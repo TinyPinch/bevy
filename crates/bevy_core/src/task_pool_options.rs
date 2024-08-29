@@ -9,6 +9,8 @@ pub struct TaskPoolThreadAssignmentPolicy {
     pub min_threads: usize,
     /// Under no circumstance use more than this many threads for this pool
     pub max_threads: usize,
+    /// Number of threads that will spin waiting for work
+    pub spin_threads: usize,
     /// Target using this percentage of total cores, clamped by `min_threads` and `max_threads`. It is
     /// permitted to use 1.0 to try to use all remaining threads
     pub percent: f32,
@@ -60,6 +62,7 @@ impl Default for TaskPoolOptions {
             io: TaskPoolThreadAssignmentPolicy {
                 min_threads: 1,
                 max_threads: 4,
+                spin_threads: 0,
                 percent: 0.25,
             },
 
@@ -67,6 +70,7 @@ impl Default for TaskPoolOptions {
             async_compute: TaskPoolThreadAssignmentPolicy {
                 min_threads: 1,
                 max_threads: 4,
+                spin_threads: 0,
                 percent: 0.25,
             },
 
@@ -74,6 +78,7 @@ impl Default for TaskPoolOptions {
             compute: TaskPoolThreadAssignmentPolicy {
                 min_threads: 1,
                 max_threads: usize::MAX,
+                spin_threads: 0,
                 percent: 1.0, // This 1.0 here means "whatever is left over"
             },
         }
@@ -110,6 +115,7 @@ impl TaskPoolOptions {
             IoTaskPool::get_or_init(|| {
                 TaskPoolBuilder::default()
                     .num_threads(io_threads)
+                    .num_spin_threads(self.io.spin_threads)
                     .thread_name("IO Task Pool".to_string())
                     .build()
             });
@@ -127,6 +133,7 @@ impl TaskPoolOptions {
             AsyncComputeTaskPool::get_or_init(|| {
                 TaskPoolBuilder::default()
                     .num_threads(async_compute_threads)
+                    .num_spin_threads(self.async_compute.spin_threads)
                     .thread_name("Async Compute Task Pool".to_string())
                     .build()
             });
@@ -144,6 +151,7 @@ impl TaskPoolOptions {
             ComputeTaskPool::get_or_init(|| {
                 TaskPoolBuilder::default()
                     .num_threads(compute_threads)
+                    .num_spin_threads(self.compute.spin_threads)
                     .thread_name("Compute Task Pool".to_string())
                     .build()
             });

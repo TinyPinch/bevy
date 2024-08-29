@@ -60,6 +60,12 @@ impl TaskPoolBuilder {
         self
     }
 
+    /// Override the number of spinny threads in the pool.
+    pub fn num_spin_threads(mut self, num_spin_threads: usize) -> Self {
+        self.num_spin_threads = num_spin_threads;
+        self
+    }
+
     /// Override the stack size of the threads created for the pool
     pub fn stack_size(mut self, stack_size: usize) -> Self {
         self.stack_size = Some(stack_size);
