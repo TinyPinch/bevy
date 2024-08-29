@@ -417,7 +417,7 @@ impl TaskPool {
         if spawned.is_empty() {
             Vec::new()
         } else {
-            spin_on::spin_on(async move {
+            block_on(async move {
                 let get_results = async {
                     let mut results = Vec::with_capacity(spawned.len());
                     while let Ok(task) = spawned.pop() {
