@@ -34,6 +34,9 @@ pub struct TaskPoolBuilder {
     /// If set, we'll set up the thread pool to use at most `num_threads` threads.
     /// Otherwise use the logical core count of the system
     num_threads: Option<usize>,
+    /// The number of threads that will spin waiting for tasks,
+    /// fully using the CPU, but improving performance.
+    num_spin_threads: usize,
     /// If set, we'll use the given stack size rather than the system default
     stack_size: Option<usize>,
     /// Allows customizing the name of the threads - helpful for debugging. If set, threads will
@@ -158,6 +161,8 @@ impl TaskPool {
                 let on_thread_spawn = builder.on_thread_spawn.clone();
                 let on_thread_destroy = builder.on_thread_destroy.clone();
 
+                let num_spin_threads = builder.num_spin_threads;
+
                 thread_builder
                     .spawn(move || {
                         TaskPool::LOCAL_EXECUTOR.with(|local_executor| {
@@ -186,13 +191,13 @@ impl TaskPool {
                                         // <Tom>
                                         // `spin_on` is >10% faster than `block_on`, but results in full CPU utilization
                                         //
-                                        // This is a low-tech compromise by creating 2 spinny quick-response threads,
-                                        // and letting the others be a bit more sleepy.
+                                        // This is a low-tech compromise by creating N spinny quick-response threads,
+                                        // and letting the others be a bit more sleepy. N=2 works well.
                                         //
                                         // For a final twist, with 4 worker threads, this is actually 7% faster
                                         // than 4 spinny threads on my Threadripper 2990WX on Windows.
 
-                                        if i < 2 {
+                                        if i < num_spin_threads {
                                             spin_on::spin_on(ex.run(tick_forever));
                                         } else {
                                             block_on(ex.run(tick_forever));
