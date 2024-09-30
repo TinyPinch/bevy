@@ -563,7 +563,7 @@ impl SystemSetNode {
 }
 
 /// A [`BoxedSystem`] with metadata, stored in a [`ScheduleGraph`].
-struct SystemNode {
+pub struct SystemNode {
     inner: Option<BoxedSystem>,
 }
 
@@ -590,7 +590,7 @@ impl SystemNode {
 #[derive(Default)]
 pub struct ScheduleGraph {
     /// List of systems in the schedule
-    systems: Vec<SystemNode>,
+    pub systems: Vec<SystemNode>,
     /// List of conditions for each system, in the same order as `systems`
     system_conditions: Vec<Vec<BoxedCondition>>,
     /// List of system sets in the schedule
